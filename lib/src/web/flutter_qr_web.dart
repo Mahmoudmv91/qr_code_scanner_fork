@@ -2,12 +2,9 @@
 
 import 'dart:async';
 import 'dart:core';
-import 'dart:js_util';
-// ignore: undefined_prefixed_name
-// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
-
-import 'dart:ui_web' as ui_web;
+import 'dart:js_util';
+import 'dart:ui_web' as ui show platformViewRegistry;
 
 import 'package:flutter/material.dart';
 
@@ -42,11 +39,9 @@ class WebQrView extends StatefulWidget {
   static Future<bool> cameraAvailable() async {
     final sources =
         await html.window.navigator.mediaDevices!.enumerateDevices();
-    // List<String> vidIds = [];
     var hasCam = false;
     for (final e in sources) {
       if (e.kind == 'videoinput') {
-        // vidIds.add(e['deviceId']);
         hasCam = true;
       }
     }
@@ -56,15 +51,12 @@ class WebQrView extends StatefulWidget {
 
 class _WebQrViewState extends State<WebQrView> {
   html.MediaStream? _localStream;
-  // html.CanvasElement canvas;
-  // html.CanvasRenderingContext2D ctx;
   bool _currentlyProcessing = false;
 
   QRViewControllerWeb? _controller;
 
   late Size _size = const Size(0, 0);
   Timer? timer;
-  String? code;
   String? _errorMsg;
   html.VideoElement video = html.VideoElement();
   String viewID = 'QRVIEW-' + DateTime.now().millisecondsSinceEpoch.toString();
@@ -81,14 +73,12 @@ class _WebQrViewState extends State<WebQrView> {
 
     facing = widget.cameraFacing ?? CameraFacing.front;
 
-    // video = html.VideoElement();
     WebQrView.vidDiv.children = [video];
-    // ignore: UNDEFINED_PREFIXED_NAME
-    // ui.platformViewRegistry
-    //     .registerViewFactory(viewID, (int id) => WebQrView.vidDiv);
-    ui_web.platformViewRegistry
-    .registerViewFactory(viewID, (int id) => WebQrView.vidDiv);
-    // giving JavaScipt some time to process the DOM changes
+
+    // 👇 اینجا مشکل حل شد
+    ui.platformViewRegistry
+        .registerViewFactory(viewID, (int id) => WebQrView.vidDiv);
+
     Timer(const Duration(milliseconds: 500), () {
       start();
     });
@@ -119,7 +109,6 @@ class _WebQrViewState extends State<WebQrView> {
     super.dispose();
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> _makeCall() async {
     if (_localStream != null) {
       return;
@@ -130,10 +119,7 @@ class _WebQrViewState extends State<WebQrView> {
           video: VideoOptions(
         facingMode: (facing == CameraFacing.front ? 'user' : 'environment'),
       ));
-      // dart style, not working properly:
-      // var stream =
-      //     await html.window.navigator.mediaDevices.getUserMedia(constraints);
-      // straight JS:
+
       if (_controller == null) {
         _controller = QRViewControllerWeb(this);
         widget.onPlatformViewCreated(_controller!);
@@ -142,8 +128,7 @@ class _WebQrViewState extends State<WebQrView> {
       widget.onPermissionSet?.call(_controller!, true);
       _localStream = stream;
       video.srcObject = _localStream;
-      video.setAttribute('playsinline',
-          'true'); // required to tell iOS safari we don't want fullscreen
+      video.setAttribute('playsinline', 'true');
       await video.play();
     } catch (e) {
       cancel();
@@ -164,17 +149,13 @@ class _WebQrViewState extends State<WebQrView> {
 
   Future<void> _stopStream() async {
     try {
-      // await _localStream.dispose();
       _localStream!.getTracks().forEach((track) {
         if (track.readyState == 'live') {
           track.stop();
         }
       });
-      // video.stop();
       video.srcObject = null;
       _localStream = null;
-      // _localRenderer.srcObject = null;
-      // ignore: empty_catches
     } catch (e) {}
   }
 
@@ -185,8 +166,6 @@ class _WebQrViewState extends State<WebQrView> {
     final canvas =
         html.CanvasElement(width: video.videoWidth, height: video.videoHeight);
     final ctx = canvas.context2D;
-    // canvas.width = video.videoWidth;
-    // canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
     final imgData = ctx.getImageData(0, 0, canvas.width!, canvas.height!);
 
@@ -200,15 +179,12 @@ class _WebQrViewState extends State<WebQrView> {
 
     try {
       final code = jsQR(imgData.data, canvas.width, canvas.height);
-      // ignore: unnecessary_null_comparison
       if (code != null && code.data != null) {
         _scanUpdateController
             .add(Barcode(code.data, BarcodeFormat.qrcode, code.data.codeUnits));
       }
     } on NoSuchMethodError {
-      // Do nothing, this exception occurs continously in web release when no
-      // code is found.
-      // NoSuchMethodError: method not found: 'get$data' on null
+      // ignore: avoid_print
     }
   }
 
@@ -251,7 +227,7 @@ class _WebQrViewState extends State<WebQrView> {
     );
   }
 
-  void _setCanvasSize(ui.Size size) {
+  void _setCanvasSize(Size size) {
     setState(() {
       _size = size;
     });
@@ -267,7 +243,6 @@ class QRViewControllerWeb implements QRViewController {
 
   @override
   Future<CameraFacing> flipCamera() async {
-    // TODO: improve error handling
     _state.facing = _state.facing == CameraFacing.front
         ? CameraFacing.back
         : CameraFacing.front;
@@ -282,29 +257,24 @@ class QRViewControllerWeb implements QRViewController {
 
   @override
   Future<bool?> getFlashStatus() async {
-    // TODO: flash is simply not supported by JavaScipt. To avoid issuing applications, we always return it to be off.
     return false;
   }
 
   @override
   Future<SystemFeatures> getSystemFeatures() {
-    // TODO: implement getSystemFeatures
     throw UnimplementedError();
   }
 
   @override
-  // TODO: implement hasPermissions. Blocking: WebQrView.cameraAvailable() returns a Future<bool> whereas a bool is required
   bool get hasPermissions => throw UnimplementedError();
 
   @override
   Future<void> pauseCamera() {
-    // TODO: implement pauseCamera
     throw UnimplementedError();
   }
 
   @override
   Future<void> resumeCamera() {
-    // TODO: implement resumeCamera
     throw UnimplementedError();
   }
 
@@ -313,19 +283,16 @@ class QRViewControllerWeb implements QRViewController {
 
   @override
   Future<void> stopCamera() {
-    // TODO: implement stopCamera
     throw UnimplementedError();
   }
 
   @override
   Future<void> toggleFlash() async {
-    // TODO: flash is simply not supported by JavaScipt
     return;
   }
 
   @override
   Future<void> scanInvert(bool isScanInvert) {
-    // TODO: implement scanInvert
     throw UnimplementedError();
   }
 }
